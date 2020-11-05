@@ -1,0 +1,228 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+```
+
+### Load data
+```{r load-data}
+load("brfss2013.RData")
+```
+
+* * *
+
+## Part 1: Data
+Behavioral Risk Factor Surveillance System (BRFSS) is telephonic survey with standardized questionnaire, used to collected prevalence data among adult US residents regarding their risk behaviors and preventive health practices that can affect their health status. 
+
+We are given a dataset containing information of over 490,000 responders fairly distributed across all 50 states, district of columbia and US oversees territories so the survey results are generalizable.
+
+The study is of an observational nature, since no random assignment is involved, any relationship between variables can only conclude correlation and not causality. 
+
+* * *
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+For our first research question, we will explore the general distribution of mental health across the survey population and figure out how it varies with employment status. 
+
+Informal employment or Unemployment can be a cause of severe stress. 
+
+We'll use the following variables:
+
+- menthlth: Number Of Days Mental Health Not Good. 
+- employ1: Employment Status.
+
+
+
+**Research quesion 2:**
+
+Health-Care Coverage forms a major part of Health-Care access. we'll study how it varies across income and gender of the respondent, to figure out if there are any disparities. 
+
+ - hlthpln1: Have Any Health Care Coverage.
+ - sex: Respondent's Sex.
+ - income2
+
+
+**Research quesion 3:**
+
+Next, we'll study the relationship between 'length since last routine checkup' and educational attainments to see if higher educational attainments and concern for one's health are co-related. We will also study the relationship between 'routine checkups' and general health. 
+
+- educa: Education Level.
+- checkup1: Length Of Time Since Last Routine Checkup.
+- genhlth: General Health.
+
+
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+**Research quesion 1:**
+
+Extracting the required variables for our study in another dataframe and omitting the NA values. 
+```{r subset-of-data}
+mentalhealth <- brfss2013 %>% 
+  select(menthlth,employ1,income2) %>% na.omit()
+```
+
+
+
+Now, let see the general distribution of mental health across the survey population. Variable 'menthlth' indicates the number of days mental health of a person is not good. The higher value indicates poor mental health. 
+```{r generalDistribution}
+mentalhealth %>%
+  group_by(menthlth) %>% 
+  summarise(count = n())
+```
+
+To understand the shape of the distribution.
+
+```{r mental-Health-Distribution}
+qplot(data = mentalhealth, x = menthlth) + ylab("Number of Responders") + xlab("Number Of Days Mental Health Not Good.") +
+    xlim(c(0, 30)) + ylim(c(0, 25000))
+```
+We can see that a majority of respondents have had less than 10 days of 'bad' mental health. 
+
+
+To study proportion of various employment types in mental health distribution,we will plot a segmented bar-chart.
+
+```{r variation-Across-Employment-Status}
+ggplot(data = mentalhealth, aes(x = menthlth, fill = employ1)) +  geom_bar(position = "fill") +
+  labs(y = "Proportion") + xlim(c(0, 30)) + xlab("Number Of Days Mental Health Not Good.")
+```
+
+So those who are unable to work have a higher proportion among responders who have more bad mental health days.  
+
+
+```{r}
+mentalhealth %>% 
+  group_by(employ1, menthlth) %>% 
+  summarise(count = n())
+```
+
+
+
+
+
+
+**Research quesion 2:**
+
+Here we have three categorical variables, income, sex and whether or not the respondent has a health care coverage, of which only income level is ordinal.
+
+```{r Health-Care-Coverage}
+brfss2013 %>% 
+  group_by(hlthpln1) %>% 
+  summarise(count = n())
+```
+
+So a majority of respondents have healthcare coverage. 
+
+Next, we will try to understand the gender variation among respondents who answered 'No'. 
+
+
+```{r Gender-Variation-In-Health-Coverage}
+brfss2013 %>% 
+  filter(hlthpln1 == "No") %>%
+  group_by(sex) %>% 
+  summarise(count=n())
+```
+
+We observe the there are more female respondents without healthcare coverage, but in-general there isn't such a large skew towards one side.
+
+
+Next, we study the variation of absence of health coverage across income levels. To do this we are creating a new dataframe. 
+
+
+
+
+```{r Absence-of-Health-Care-Coverage}
+hcabsence <- brfss2013 %>%
+  filter(hlthpln1 == "No", !is.na(income2))%>%
+  select(income2, hlthpln1)
+```
+ 
+
+Now we will plot the absence of health care coverage across income level. 
+
+
+```{r Absence-of-Health-Care-Coverage-vs-Income}
+hcabsence %>%
+  group_by(income2) %>%
+  summarise(count)
+
+```
+
+
+```{r Income-Level-vs-Health-Care-Coverage-Absence}
+ggplot(data = hcabsence, aes(y = income2)) + ylab("Income") + geom_bar()
+```
+
+Barplot hints that respondents earning more than $50,000 are less likely to not have health care coverage as opposed to those in lower income category. 
+
+
+
+**Research quesion 3:**
+
+
+We want to study the impact of 'routine checkup' on general health of respondents and also explore if there is any relationship between educational attainment and 'routine checkup'. 
+
+
+```{r routine-checkup}
+routinecheck <- brfss2013 %>%
+  filter(!is.na(educa),!is.na(checkup1), !is.na(genhlth) )%>%
+  select(educa, checkup1, genhlth )%>%
+  group_by(checkup1)
+
+```
+
+
+
+
+```{r plot-routine-check-vs-educational-attainment}
+ggplot(data= routinecheck, aes(y=checkup1, fill=educa)) + geom_bar(position = "fill" ) + ylab("Last Routine Checkup") +  labs(fill="Educational Attainment")
+
+  
+```
+
+Individuals with higher educational attainment are more likely to undergo routine checkup.
+
+
+Next, lets study general health of those who haven't undergone routine checkup in past one year.  
+
+
+```{r no-routine-checkup}
+noroutinecheck <- routinecheck %>%
+  filter(checkup1 != 'Within past year') %>%
+  select(checkup1, genhlth )
+  
+
+```
+
+
+
+```{r plot-general-health-vs-no-routine-check}
+ggplot(data = noroutinecheck, aes(x = genhlth, fill = checkup1)) + geom_bar() + xlab("General Health")
+```
+
+
+Clearly 'Routine Checkup' is not a very big factor in General Health of Responders. 
+
+
+
+
+------------------------------------
+
+
+
+
